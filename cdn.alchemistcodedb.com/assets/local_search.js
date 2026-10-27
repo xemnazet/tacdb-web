@@ -12,18 +12,6 @@ if (form && input && list && loading) {
   let timeout;
   let searchVersion = 0;
 
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const query = input.value.trim();
-    if (!query) {
-      return;
-    }
-
-    const destination = new URL(searchPage, siteRoot);
-    destination.searchParams.set("s", query);
-    window.location.assign(destination.href);
-  });
-
   input.addEventListener("input", () => {
     const version = ++searchVersion;
     clearTimeout(timeout);
