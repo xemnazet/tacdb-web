@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Search - The Alchemist Code Database</title>
+  <link rel="stylesheet" href="../cdn.alchemistcodedb.com/assets/application-a2b3cc5bb409793aa98e1c00d01f976654b0c9eca2d5049488e203b915554e70.css">
+  <style>
+    .search-results .list-group-item { padding: .75rem 1rem; }
+    .search-result-icon { width: 48px; height: 48px; flex: 0 0 48px; object-fit: contain; margin-right: .875rem; }
+    .search-result-content { min-width: 0; }
+    .search-result-title { font-weight: 600; }
+    .search-result-category { margin-left: .5rem; }
+    .search-result-description { margin: .35rem 0 0; }
+  </style>
+</head>
+<body data-locale="en">
+  <script>
+    if (localStorage.theme === "dark" || ((!("theme" in localStorage) || localStorage.theme === "auto") && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+      document.body.classList.add("dark");
+      document.body.setAttribute("data-bs-theme", "dark");
+    } else {
+      document.body.classList.add("light");
+      document.body.setAttribute("data-bs-theme", "light");
+    }
+  </script>
+  <nav class="navbar navbar-expand-lg navbar-light navbar-image-bg">
+    <div class="container">
+      <a class="navbar-brand" href="index.html"><img alt="AlchemistCodeDB" src="../cdn.alchemistcodedb.com/assets/alchemistcode-db-4f33cbfb6100f1910d79c65849ea8eab5be924a48e20a1b2a763554af8fb4042.png"></a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navigation" aria-controls="navigation" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navigation">
+        <ul class="navbar-nav me-auto mt-2 mt-lg-0">
+          <li class="nav-item"><a class="nav-link" href="units.html">Units</a></li>
+          <li class="nav-item"><a class="nav-link" href="gears.html">Gear</a></li>
+          <li class="nav-item"><a class="nav-link" href="cards.html">Mementos</a></li>
+          <li class="nav-item"><a class="nav-link" href="runes.html">Seals</a></li>
+          <li class="nav-item"><a class="nav-link" href="quests.html">Quests</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" id="navbarOther" role="button" data-bs-toggle="dropdown" aria-expanded="false" href="#">Other</a>
+            <ul class="dropdown-menu" aria-labelledby="navbarOther">
+              <li><a class="dropdown-item" href="items.html">Items</a></li>
+              <li><a class="dropdown-item" href="missions.html">Missions</a></li>
+              <li><a class="dropdown-item" href="skills.html">Skills</a></li>
+            </ul>
+          </li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" id="navbarTools" role="button" data-bs-toggle="dropdown" aria-expanded="false" href="#">Tools</a>
+            <div class="dropdown-menu" aria-labelledby="navbarTools">
+              <a class="dropdown-item" href="babel-expedition.html">Babel Expedition</a>
+              <a class="dropdown-item" href="experience-chart.html">Experience Chart</a>
+              <a class="dropdown-item" href="planner.html">Unit Planner</a>
+            </div>
+          </li>
+        </ul>
+        <form id="search" class="my-2 my-lg-0 flex-grow-1" action="search.html" method="get">
+          <div class="input-group input-group-sm">
+            <input type="text" name="s" id="s" class="form-control" placeholder="Search the database…" autocomplete="off" aria-label="Search the database…">
+            <button type="submit" class="btn btn-sm btn-primary" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
+            <div class="d-flex align-items-center search-loading d-none"><div class="spinner-border me-2" aria-hidden="true"></div>Loading...</div>
+            <ul role="listbox" id="search_list" hidden></ul>
+          </div>
+        </form>
+      </div>
+    </div>
+  </nav>
+  <div class="container mt-3">
+    <div class="row">
+      <div class="col-lg-3">
+        <div class="card mb-3 main-panel side-panel">
+          <div class="card-body"><p>AlchemistCodeDB is a database for The Alchemist Code.</p></div>
+        </div>
+        <div class="list-group list-tabs d-none d-lg-block">
+          <a class="list-group-item list-group-item-action" href="index.html">Database home</a>
+        </div>
+      </div>
+      <div class="col-lg-9">
+        <div class="card main-panel">
+          <div class="card-header page-card-header">Search the database</div>
+          <div class="card-body">
+            <form action="search.html" method="get" class="mb-3">
+              <label class="form-label" for="query">Search by name, slug, or description</label>
+              <div class="input-group">
+                <input id="query" name="s" type="search" class="form-control" required>
+                <button type="submit" class="btn btn-primary">Search</button>
+              </div>
+            </form>
+            <p id="status" class="mb-3" role="status"></p>
+            <ul id="results" class="list-group list-tabs search-results"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer>
+      <p class="copyright"><a href="index.html">Database home</a></p>
+      <p class="copyright">&copy; 2017 - 2024 AlchemistCodeDB.com<br>
+      All game content and assets are trademarks and copyrights of Fuji&amp;gumi Games or gumi Inc. This site is not affiliated with Fuji&amp;gumi Games or gumi Inc.</p>
+    </footer>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="../cdn.alchemistcodedb.com/assets/local_search.js"></script>
+  <script type="module">
+    import { loadSearchIndex, searchEntries } from "../cdn.alchemistcodedb.com/assets/controllers/search_index.js";
+
+    const params = new URLSearchParams(window.location.search);
+    const query = params.get("s")?.trim() ?? "";
+    const queryInput = document.getElementById("query");
+    const status = document.getElementById("status");
+    const resultsList = document.getElementById("results");
+    queryInput.value = query;
+
+    if (query) {
+      status.textContent = "Searching the downloaded database…";
+      try {
+        const entries = await loadSearchIndex();
+        const results = searchEntries(entries, query, 100);
+        status.textContent = results.length
+          ? `${results.length === 100 ? "Showing the first 100" : results.length} results for “${query}”.`
+          : `No results found for “${query}”.`;
+        for (const result of results) {
+          const item = document.createElement("li");
+          item.className = "list-group-item d-flex align-items-center";
+          if (result.icon) {
+            const icon = document.createElement("img");
+            icon.className = "search-result-icon";
+            icon.src = new URL(`../cdn.alchemistcodedb.com/images/${result.icon}`, window.location.href).href;
+            icon.alt = "";
+            icon.loading = "lazy";
+            item.append(icon);
+          }
+
+          const content = document.createElement("div");
+          content.className = "search-result-content";
+          const link = document.createElement("a");
+          link.className = "search-result-title";
+          link.href = result.path;
+          link.textContent = result.title;
+          content.append(link);
+
+          const category = document.createElement("span");
+          category.className = "badge bg-secondary search-result-category";
+          category.textContent = result.category;
+          content.append(category);
+
+          if (result.description) {
+            const description = document.createElement("p");
+            description.className = "search-result-description text-muted";
+            description.textContent = result.description;
+            content.append(description);
+          }
+          item.append(content);
+          resultsList.append(item);
+        }
+      } catch (error) {
+        console.error("Could not load local search data.", error);
+        status.textContent = "Search data could not be loaded.";
+      }
+    } else {
+      status.textContent = "Enter a name, slug, or description to search the database.";
+    }
+  </script>
+</body>
+</html>
