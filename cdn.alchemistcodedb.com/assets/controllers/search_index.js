@@ -5,6 +5,7 @@ const indexUrls = {
 export const siteRoot = new URL("../../../www.alchemistcodedb.com/", import.meta.url);
 
 const japaneseCategories = {
+  Crystal: "幻影記憶",
   Gear: "ギア",
   Item: "アイテム",
   Memento: "真理念装",
@@ -20,7 +21,7 @@ const indexPromises = new Map();
 export function loadSearchIndex(locale = "en") {
   if (!indexPromises.has(locale)) {
     const indexUrl = indexUrls[locale] || indexUrls.en;
-    const indexPromise = fetch(indexUrl)
+    const indexPromise = fetch(indexUrl, { cache: "no-cache" })
       .then((response) => {
         if (!response.ok) {
           throw new Error(`Search index request failed: ${response.status}`);
