@@ -1,4 +1,4 @@
-import { loadSearchIndex, searchEntries, siteRoot } from "./controllers/search_index.js";
+import { categoryLabel, loadSearchIndex, searchEntries, siteRoot } from "./controllers/search_index.js";
 
 const form = document.getElementById("search");
 const input = form?.querySelector('input[name="s"]');
@@ -6,9 +6,23 @@ const list = document.getElementById("search_list");
 const loading = form?.querySelector(".search-loading");
 
 if (form && input && list && loading) {
-  form.action = new URL("search.html", siteRoot).href;
+  const locale = document.body.dataset.locale === "jp" ? "jp" : "en";
+  const searchPage = locale === "jp" ? "jp/search.html" : "search.html";
+  form.action = new URL(searchPage, siteRoot).href;
   let timeout;
   let searchVersion = 0;
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const query = input.value.trim();
+    if (!query) {
+      return;
+    }
+
+    const destination = new URL(searchPage, siteRoot);
+    destination.searchParams.set("s", query);
+    window.location.assign(destination.href);
+  });
 
   input.addEventListener("input", () => {
     const version = ++searchVersion;
@@ -24,17 +38,17 @@ if (form && input && list && loading) {
     loading.classList.remove("d-none");
     timeout = setTimeout(async () => {
       try {
-        const entries = await loadSearchIndex();
+        const entries = await loadSearchIndex(locale);
         if (version !== searchVersion) {
           return;
         }
 
-        for (const result of searchEntries(entries, input.value)) {
+        for (const result of searchEntries(entries, input.value, 10)) {
           const item = document.createElement("li");
           item.setAttribute("role", "option");
           const link = document.createElement("a");
           link.href = new URL(result.path, siteRoot).href;
-          link.textContent = `${result.title} (${result.category})`;
+          link.textContent = `${result.title} (${categoryLabel(result.category, locale)})`;
           item.append(link);
           list.append(item);
         }

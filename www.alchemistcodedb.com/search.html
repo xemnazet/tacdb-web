@@ -16,6 +16,14 @@
 </head>
 <body data-locale="en">
   <script>
+    const locale = new URLSearchParams(window.location.search).get("locale");
+    if (locale === "jp") {
+      const destination = new URL("jp/search.html", window.location.href);
+      destination.searchParams.set("s", new URLSearchParams(window.location.search).get("s") ?? "");
+      window.location.replace(destination.href);
+    }
+  </script>
+  <script>
     if (localStorage.theme === "dark" || ((!("theme" in localStorage) || localStorage.theme === "auto") && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
       document.body.classList.add("dark");
       document.body.setAttribute("data-bs-theme", "dark");
@@ -62,6 +70,10 @@
             <ul role="listbox" id="search_list" hidden></ul>
           </div>
         </form>
+        <div class="btn-group pull-right ms-2" role="group" aria-label="Locale switcher">
+          <a class="btn btn-sm btn-light" role="button" href="index.html">GL</a>
+          <a class="btn btn-sm btn-primary" role="button" href="jp.html">JP</a>
+        </div>
       </div>
     </div>
   </nav>
@@ -83,6 +95,7 @@
               <label class="form-label" for="query">Search by name, slug, or description</label>
               <div class="input-group">
                 <input id="query" name="s" type="search" class="form-control" required>
+                <input id="query-locale" type="hidden" name="locale" value="en">
                 <button type="submit" class="btn btn-primary">Search</button>
               </div>
             </form>
@@ -101,23 +114,78 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script type="module" src="../cdn.alchemistcodedb.com/assets/local_search.js"></script>
   <script type="module">
-    import { loadSearchIndex, searchEntries } from "../cdn.alchemistcodedb.com/assets/controllers/search_index.js";
+    import { categoryLabel, loadSearchIndex, searchEntries } from "../cdn.alchemistcodedb.com/assets/controllers/search_index.js";
 
     const params = new URLSearchParams(window.location.search);
     const query = params.get("s")?.trim() ?? "";
+    const locale = params.get("locale") === "jp" ? "jp" : "en";
     const queryInput = document.getElementById("query");
+    const localeInput = document.getElementById("query-locale");
     const status = document.getElementById("status");
     const resultsList = document.getElementById("results");
     queryInput.value = query;
+    localeInput.value = locale;
+    const glLocaleButton = document.querySelector('.btn-group[aria-label="Locale switcher"] a[href="index.html"]');
+    const jpLocaleButton = document.querySelector('.btn-group[aria-label="Locale switcher"] a[href="jp.html"]');
+    const globalSearchUrl = new URL("search.html", window.location.href);
+    const japaneseSearchUrl = new URL("jp/search.html", window.location.href);
+    if (query) {
+      globalSearchUrl.searchParams.set("s", query);
+      japaneseSearchUrl.searchParams.set("s", query);
+    }
+    glLocaleButton.href = globalSearchUrl.href;
+    jpLocaleButton.href = japaneseSearchUrl.href;
+    if (locale === "jp") {
+      document.title = "検索 - 誰ガ為のアルケミスト";
+      document.querySelector(".card-header").textContent = "データベース検索";
+      document.querySelector('label[for="query"]').textContent = "名前、スラッグ、説明で検索";
+      document.querySelector('#query + input + button').textContent = "検索";
+      document.querySelector("#search input[name='s']").placeholder = "データベースを検索…";
+      document.querySelector(".navbar-brand").href = "jp.html";
+      for (const link of document.querySelectorAll(".navbar-nav a[href$='.html']")) {
+        link.href = `jp/${link.getAttribute("href")}`;
+      }
+      const navigationLabels = {
+        Units: "ユニット",
+        Gear: "ギア",
+        Mementos: "真理念装",
+        Seals: "真理刻印",
+        Quests: "クエスト",
+        Other: "その他",
+        Tools: "ツール",
+        Items: "アイテム",
+        Missions: "ミッション",
+        Skills: "スキル",
+      };
+      for (const link of document.querySelectorAll(".navbar-nav a")) {
+        const label = link.textContent.trim();
+        if (navigationLabels[label]) {
+          link.textContent = navigationLabels[label];
+        }
+      }
+      document.querySelectorAll(".list-group a[href='index.html'], footer a[href='index.html']").forEach((link) => {
+        link.href = "jp.html";
+        if (link.textContent.trim() === "Database home") {
+          link.textContent = "トップページ";
+        }
+      });
+      glLocaleButton.className = "btn btn-sm btn-light";
+      jpLocaleButton.className = "btn btn-sm btn-primary";
+    } else {
+      glLocaleButton.className = "btn btn-sm btn-primary";
+      jpLocaleButton.className = "btn btn-sm btn-light";
+    }
 
     if (query) {
-      status.textContent = "Searching the downloaded database…";
+      status.textContent = locale === "jp" ? "データベースを検索しています…" : "Searching the downloaded database…";
       try {
-        const entries = await loadSearchIndex();
+        const entries = await loadSearchIndex(locale);
         const results = searchEntries(entries, query, 100);
         status.textContent = results.length
-          ? `${results.length === 100 ? "Showing the first 100" : results.length} results for “${query}”.`
-          : `No results found for “${query}”.`;
+          ? locale === "jp"
+            ? `${results.length === 100 ? "最初の100件を表示" : `${results.length}件`}： “${query}” の検索結果`
+            : `${results.length === 100 ? "Showing the first 100" : results.length} results for “${query}”.`
+          : locale === "jp" ? `“${query}” の検索結果はありません。` : `No results found for “${query}”.`;
         for (const result of results) {
           const item = document.createElement("li");
           item.className = "list-group-item d-flex align-items-center";
@@ -140,7 +208,7 @@
 
           const category = document.createElement("span");
           category.className = "badge bg-secondary search-result-category";
-          category.textContent = result.category;
+          category.textContent = categoryLabel(result.category, locale);
           content.append(category);
 
           if (result.description) {
@@ -157,7 +225,9 @@
         status.textContent = "Search data could not be loaded.";
       }
     } else {
-      status.textContent = "Enter a name, slug, or description to search the database.";
+      status.textContent = locale === "jp"
+        ? "名前、スラッグ、説明を入力して検索してください。"
+        : "Enter a name, slug, or description to search the database.";
     }
   </script>
 </body>

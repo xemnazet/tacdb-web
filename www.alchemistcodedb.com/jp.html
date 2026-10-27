@@ -111,15 +111,15 @@
             </div>
           </li>
         </ul>
-        <form id="search" class="my-2 my-lg-0 flex-grow-1" data-controller="search" action="https://www.alchemistcodedb.com/jp/search" accept-charset="UTF-8" method="get">
+        <form id="search" class="my-2 my-lg-0 flex-grow-1" action="search.html" accept-charset="UTF-8" method="get">
           <div class="input-group input-group-sm">
-              <input type="text" name="s" id="s" class="form-control" placeholder="Search the database…" autocomplete="off" aria-label="Search the database…" data-search-target="input" data-action="keydown.enter-&gt;search#updateInput input-&gt;search#result focus-&gt;search#start focusout-&gt;search#stop" />
+              <input type="text" name="s" id="s" class="form-control" placeholder="Search the database…" autocomplete="off" aria-label="Search the database…" />
             <span class="input-group-btn">
-              <button type="submit" class="btn btn-sm btn-primary" data-action="click-&gt;search#disabled">
+              <button type="submit" class="btn btn-sm btn-primary">
                 <i class="fa-solid fa-magnifying-glass"></i>
 </button>            </span>
-            <div class="d-flex align-items-center search-loading d-none" data-search-target="loading"><div class="spinner-border me-2" aria-hidden="true"></div>Loading...</div>
-            <turbo-frame id="search_results" target="_top"><ul role="listbox" id="search_list" data-search-target="list" hidden></ul></turbo-frame>
+            <div class="d-flex align-items-center search-loading d-none"><div class="spinner-border me-2" aria-hidden="true"></div>Loading...</div>
+            <ul role="listbox" id="search_list" hidden></ul>
           </div>
 </form>        <div class="btn-group pull-right ms-2" role="group" aria-label="Locale switcher">
             <a class="btn btn-sm btn-light" role="button" href="index.html">GL</a>
@@ -2054,6 +2054,7 @@
   All game content and assets are trademarks and copyrights of Fuji&amp;gumi Games or gumi Inc. This site is not affiliated with Fuji&amp;gumi Games or gumi Inc.</p>
 </footer>
   </div>
+  <script type="module" src="../cdn.alchemistcodedb.com/assets/local_search.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 
