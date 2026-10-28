@@ -1,6 +1,8 @@
 import os
 import re
+import shutil
 from pathlib import Path
+from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 
 ROOT = Path(__file__).resolve().parent
@@ -21,10 +23,21 @@ SEARCH_ATTRIBUTES = re.compile(
 )
 FORM_ACTION = re.compile(r'\saction=(["\']).*?\1', re.IGNORECASE)
 SEARCH_INPUT = re.compile(r'(<input\b(?=[^>]*\bname=["\']s["\'])[^>]*)(/?>)', re.IGNORECASE)
+URL_ATTRIBUTE = re.compile(
+    r'\b(?:href|src|action|poster|data-src|data-original)=(["\'])(.*?)\1',
+    re.IGNORECASE | re.DOTALL,
+)
 BODY_END = re.compile(r"</body\s*>", re.IGNORECASE)
+IGNORED_COPY_DIRECTORIES = shutil.ignore_patterns("__pycache__", "*.pyc")
 
 
-def prepare_page(page, dry_run=False):
+def prepare_page(
+    page,
+    dry_run=False,
+    site_root=SITE_ROOT,
+    search_script=SEARCH_SCRIPT,
+    listing_search_script=LISTING_SEARCH_SCRIPT,
+):
     with page.open(encoding="utf-8", errors="replace", newline="") as page_file:
         source = page_file.read()
     match = SEARCH_FORM.search(source)
@@ -34,13 +47,13 @@ def prepare_page(page, dry_run=False):
 
     updated = source
     if match:
-        relative_page = page.relative_to(SITE_ROOT)
+        relative_page = page.relative_to(site_root)
         is_japanese_page = (
             relative_page.parts[0].lower() == "jp"
             or page.name.lower() == "jp.html"
             or re.search(r'<body\b[^>]*\bdata-locale="jp"', source, re.IGNORECASE) is not None
         )
-        result_page = SITE_ROOT / ("jp" if is_japanese_page else "") / "search.html"
+        result_page = site_root / ("jp" if is_japanese_page else "") / "search.html"
         relative_search_page = os.path.relpath(result_page, page.parent).replace(os.sep, "/")
         form = match.group(0)
         form = SEARCH_ATTRIBUTES.sub("", form)
@@ -58,10 +71,10 @@ def prepare_page(page, dry_run=False):
 
     scripts = []
     if match:
-        relative_script = os.path.relpath(SEARCH_SCRIPT, page.parent).replace(os.sep, "/")
+        relative_script = os.path.relpath(search_script, page.parent).replace(os.sep, "/")
         scripts.append(f'<script type="module" src="{relative_script}"></script>')
     if has_listing_search:
-        relative_listing_script = os.path.relpath(LISTING_SEARCH_SCRIPT, page.parent).replace(os.sep, "/")
+        relative_listing_script = os.path.relpath(listing_search_script, page.parent).replace(os.sep, "/")
         scripts.append(f'<script type="module" src="{relative_listing_script}"></script>')
     scripts = [script for script in scripts if script not in updated]
     if scripts:
@@ -78,12 +91,112 @@ def prepare_page(page, dry_run=False):
     return False
 
 
+def rebase_site_references(source_page, output_page, output_root):
+    with output_page.open(encoding="utf-8", errors="replace", newline="") as page_file:
+        source = page_file.read()
+
+    def rebase(match):
+        value = match.group(2)
+        parsed = urlsplit(value)
+        if parsed.scheme or parsed.netloc or not parsed.path.startswith("../"):
+            return match.group(0)
+
+        source_target = (source_page.parent / unquote(parsed.path)).resolve()
+        try:
+            relative_target = source_target.relative_to(ROOT.resolve())
+        except ValueError:
+            return match.group(0)
+
+        if SITE_ROOT.resolve() in source_target.parents:
+            if SITE_ROOT.name not in Path(unquote(parsed.path)).parts:
+                return match.group(0)
+            relative_target = source_target.relative_to(SITE_ROOT.resolve())
+
+        output_target = output_root / relative_target
+        if not output_target.exists():
+            return match.group(0)
+
+        relative_url = Path(os.path.relpath(output_target, output_page.parent)).as_posix()
+        encoded_path = quote(relative_url, safe="/.-_~")
+        rebased_url = urlunsplit(("", "", encoded_path, parsed.query, parsed.fragment))
+        return match.group(0).replace(value, rebased_url, 1)
+
+    updated = URL_ATTRIBUTE.sub(rebase, source)
+    if updated != source:
+        with output_page.open("w", encoding="utf-8", newline="") as page_file:
+            page_file.write(updated)
+
+
+def build_flat_site(output_dir):
+    output_dir = Path(output_dir)
+    if not output_dir.is_absolute():
+        output_dir = ROOT / output_dir
+    output_dir = output_dir.resolve()
+    if output_dir == ROOT.resolve() or ROOT.resolve() not in output_dir.parents:
+        raise ValueError(f"Output directory must be a child of the repository root: {output_dir}")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if any(output_dir.iterdir()):
+        raise FileExistsError(f"Output directory must be empty: {output_dir}")
+
+    excluded = {
+        ".git",
+        ".github",
+        SITE_ROOT.name,
+        output_dir.name,
+        "__pycache__",
+        "generate_search_index.py",
+        "prepare_search_pages.py",
+        "index.html",
+    }
+    for source in ROOT.iterdir():
+        if source.name in excluded or source.suffix == ".py":
+            continue
+        destination = output_dir / source.name
+        if source.is_dir():
+            shutil.copytree(source, destination, dirs_exist_ok=True, ignore=IGNORED_COPY_DIRECTORIES)
+        else:
+            shutil.copy2(source, destination)
+
+    shutil.copytree(SITE_ROOT, output_dir, dirs_exist_ok=True, ignore=IGNORED_COPY_DIRECTORIES)
+
+    for source_page in SITE_ROOT.rglob("*.html"):
+        relative_page = source_page.relative_to(SITE_ROOT)
+        output_page = output_dir / relative_page
+        rebase_site_references(source_page, output_page, output_dir)
+        prepare_page(
+            output_page,
+            site_root=output_dir,
+            search_script=output_dir / "cdn.alchemistcodedb.com" / "assets" / "local_search.js",
+            listing_search_script=output_dir / "cdn.alchemistcodedb.com" / "assets" / "local_listing_search.js",
+        )
+
+    search_index_script = output_dir / "cdn.alchemistcodedb.com" / "assets" / "controllers" / "search_index.js"
+    with search_index_script.open(encoding="utf-8", errors="replace", newline="") as script_file:
+        script = script_file.read()
+    script = script.replace(
+        'new URL("../../../www.alchemistcodedb.com/", import.meta.url)',
+        'new URL("../../../", import.meta.url)',
+    )
+    with search_index_script.open("w", encoding="utf-8", newline="") as script_file:
+        script_file.write(script)
+
+    if not (output_dir / "index.html").is_file():
+        raise FileNotFoundError(f"Flattened site is missing its root index.html: {output_dir}")
+    print(f"Prepared flattened site at {output_dir}")
+
+
 def main():
     import argparse
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="Report pages that need changes without writing them")
+    parser.add_argument("--output-dir", type=Path, help="Build a flattened deployable site in this directory")
     args = parser.parse_args()
+    if args.output_dir:
+        if args.check:
+            parser.error("--check cannot be combined with --output-dir")
+        build_flat_site(args.output_dir)
+        return
     changed = 0
     for page in SITE_ROOT.rglob("*.html"):
         changed += prepare_page(page, dry_run=args.check)
