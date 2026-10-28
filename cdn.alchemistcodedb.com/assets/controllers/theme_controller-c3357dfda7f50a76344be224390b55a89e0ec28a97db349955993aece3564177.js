@@ -5,11 +5,12 @@ export default class extends Controller {
     setTheme(getPreferredTheme());
     const theme = document.body.getAttribute("data-bs-theme");
     showActiveTheme(theme, false);
-    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", updatePreferredTheme);
+    this.colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
+    this.colorScheme.addEventListener("change", updatePreferredTheme);
   }
 
   disconnect() {
-    window.matchMedia("(prefers-color-scheme: dark)").removeEventListener("change", updatePreferredTheme);
+    this.colorScheme?.removeEventListener("change", updatePreferredTheme);
   }
 
   updateTheme(e) {
@@ -21,7 +22,10 @@ export default class extends Controller {
   }
 }
 
-const getStoredTheme = () => localStorage.getItem("theme");
+const getStoredTheme = () => {
+  const theme = localStorage.getItem("theme");
+  return ["light", "dark", "auto"].includes(theme) ? theme : null;
+};
 const setStoredTheme = theme => localStorage.setItem("theme", theme);
 
 const setTheme = theme => {
@@ -60,14 +64,21 @@ const showActiveTheme = (theme, focus = false) => {
   }
 
   const activeThemeIcon = document.querySelector("#themeDropDown i");
-  const btnToActive = document.querySelector("[data-bs-theme-value='" + theme + "']");
+  const btnToActive = Array.from(document.querySelectorAll("[data-bs-theme-value]"))
+    .find((button) => button.getAttribute("data-bs-theme-value") === theme);
+  if (!activeThemeIcon || !btnToActive) {
+    return;
+  }
 
   document.querySelectorAll("a[data-bs-theme-value] .fa-check").forEach(iconEl => {
     iconEl.classList.add("d-none");
   });
 
-  btnToActive.querySelector(".fa-check").classList.remove("d-none");
-  activeThemeIcon.className = btnToActive.querySelector("i").classList.toString();
+  btnToActive.querySelector(".fa-check")?.classList.remove("d-none");
+  const themeIcon = btnToActive.querySelector("i");
+  if (themeIcon) {
+    activeThemeIcon.className = themeIcon.classList.toString();
+  }
   activeThemeIcon.classList.remove("fa-fw", "me-2");
 
   if (focus) {

@@ -3,125 +3,118 @@ import { Tab } from "bootstrap"
 
 export default class extends Controller {
   connect() {
-    const triggerTabList = document.querySelectorAll("a[data-bs-toggle='list'], a[data-bs-toggle='tab']");
-    triggerTabList.forEach(triggerEl => {
-      const tabTrigger = new Tab(triggerEl);
-
-      function clickTab(e) {
-        e.preventDefault();
-        var tab = triggerEl.getAttribute("data-bs-target").substring(1);
-        var currentTab = triggerEl.getAttribute("data-bs-target");
-        var toggle = triggerEl.getAttribute("data-bs-toggle");
-        if(tab == "jobs") {
-          tabTrigger.show();
-          var firstTab = document.querySelector("#jobTabs li:first-child a");
-          Tab.getInstance(firstTab).show();
-          currentTab = firstTab.getAttribute("data-bs-target");
-        }
-        else if(tab == "equipment") {
-          tabTrigger.show();
-          var firstTab = document.querySelector("#equipmentTabs li:first-child a");
-          Tab.getInstance(firstTab).show();
-          currentTab = firstTab.getAttribute("data-bs-target");
-        }
-        else if(tab == "enlightenment") {
-          tabTrigger.show();
-          var firstTab = document.querySelector("#enlightenmentTabs li:first-child a");
-          Tab.getInstance(firstTab).show();
-          currentTab = firstTab.getAttribute("data-bs-target");
-        }
-        else {
-          tabTrigger.show();
-        }
-        if(toggle == "list") {
-          document.getElementById(tab).scrollIntoView({block: "start"});
-        }
-        if (history.replaceState) {
-          history.replaceState(history.state, "", currentTab);
-        }
-        else {
-          location.hash = currentTab;
-        }
-      }
-      triggerEl.addEventListener("click", clickTab);
+    this.tabTriggers = Array.from(
+      document.querySelectorAll("a[data-bs-toggle='list'], a[data-bs-toggle='tab']")
+    );
+    this.tabClickHandlers = new Map();
+    this.tabTriggers.forEach((trigger) => {
+      const handler = (event) => this.clickTab(event, trigger);
+      this.tabClickHandlers.set(trigger, handler);
+      trigger.addEventListener("click", handler);
     });
 
-    const jobIconList = document.querySelectorAll(".job-tab");
-    jobIconList.forEach(jobIconEl => {
-      function clickIcon(e) {
-        e.preventDefault();
-        var jobTab = jobIconEl.getAttribute("href");
-        var mainTab = document.querySelector("a[data-bs-target='#jobs']");
-        Tab.getInstance(mainTab).show();
-        var currentTab = document.querySelector("a[data-bs-target='" + jobTab + "']");
-        Tab.getInstance(currentTab).show();
-        document.getElementById("jobs").scrollIntoView({block: "start"});
-        if (history.replaceState) {
-          history.replaceState(history.state, "", jobTab);
-        }
-        else {
-          location.hash = currentTab;
-        }
-      }
-      jobIconEl.addEventListener("click", clickIcon);
+    this.jobIcons = Array.from(document.querySelectorAll(".job-tab"));
+    this.jobIconClickHandlers = new Map();
+    this.jobIcons.forEach((icon) => {
+      const handler = (event) => this.clickIcon(event, icon);
+      this.jobIconClickHandlers.set(icon, handler);
+      icon.addEventListener("click", handler);
     });
 
-    if(location.hash) {
-      if(location.hash.includes("equipment")) {
-        var mainTab = document.querySelector("a[data-bs-target='#equipment']");
-        Tab.getInstance(mainTab).show();
-      }
-      else if(location.hash.includes("gate")) {
-        var mainTab = document.querySelector("a[data-bs-target='#enlightenment']");
-        Tab.getInstance(mainTab).show();
-      }
-      else if(location.hash.startsWith("#j")) {
-        var mainTab = document.querySelector("a[data-bs-target='#jobs']");
-        Tab.getInstance(mainTab).show();
-      }
-      var currentTab = document.querySelector("a[data-bs-target='" + location.hash + "']");
-      Tab.getInstance(currentTab).show();
-    }
-    window.addEventListener("hashchange", hashChange);
+    this.hashChangeHandler = () => this.showHash(location.hash || "#stats");
+    window.addEventListener("hashchange", this.hashChangeHandler);
+    this.showHash(location.hash);
   }
 
   disconnect() {
-    const triggerTabList = document.querySelectorAll("a[data-bs-toggle='list'], a[data-bs-toggle='tab']");
-    triggerTabList.forEach(triggerEl => {
-      triggerEl.removeEventListener("click", clickTab);
+    this.tabClickHandlers.forEach((handler, trigger) => {
+      trigger.removeEventListener("click", handler);
     });
-
-    const jobIconList = document.querySelectorAll(".job-tab");
-    jobIconList.forEach(jobIconEl => {
-      jobIconEl.removeEventListener("click", clickIcon);
+    this.jobIconClickHandlers.forEach((handler, icon) => {
+      icon.removeEventListener("click", handler);
     });
+    window.removeEventListener("hashchange", this.hashChangeHandler);
+  }
 
-    window.removeEventListener("hashchange", hashChange);
+  clickTab(event, trigger) {
+    event.preventDefault();
+    const target = this.targetFor(trigger);
+    if (!target) {
+      return;
+    }
+
+    let currentTarget = target;
+    const targetId = target.slice(1);
+    if (["jobs", "equipment", "enlightenment"].includes(targetId)) {
+      this.show(trigger);
+      const tabListIds = {
+        jobs: "jobTabs",
+        equipment: "equipmentTabs",
+        enlightenment: "enlightenmentTabs",
+      };
+      const firstTab = document.querySelector(`#${tabListIds[targetId]} li:first-child a`);
+      if (firstTab) {
+        this.show(firstTab);
+        currentTarget = this.targetFor(firstTab) || currentTarget;
+      }
+    } else {
+      this.show(trigger);
+    }
+
+    if (trigger.getAttribute("data-bs-toggle") === "list") {
+      document.getElementById(targetId)?.scrollIntoView({ block: "start" });
+    }
+    this.updateHash(currentTarget);
+  }
+
+  clickIcon(event, icon) {
+    event.preventDefault();
+    const jobTarget = icon.getAttribute("href");
+    const mainTab = this.findTrigger("#jobs");
+    const jobTab = this.findTrigger(jobTarget);
+    if (!mainTab || !jobTab) {
+      return;
+    }
+
+    this.show(mainTab);
+    this.show(jobTab);
+    document.getElementById("jobs")?.scrollIntoView({ block: "start" });
+    this.updateHash(jobTarget);
+  }
+
+  showHash(hash) {
+    if (!hash) {
+      return;
+    }
+    if (hash.includes("equipment")) {
+      this.show(this.findTrigger("#equipment"));
+    } else if (hash.includes("gate")) {
+      this.show(this.findTrigger("#enlightenment"));
+    } else if (hash.startsWith("#j")) {
+      this.show(this.findTrigger("#jobs"));
+    }
+    this.show(this.findTrigger(hash));
+  }
+
+  findTrigger(target) {
+    return this.tabTriggers.find((trigger) => this.targetFor(trigger) === target);
+  }
+
+  targetFor(trigger) {
+    return trigger?.getAttribute("data-bs-target") || trigger?.getAttribute("href");
+  }
+
+  show(trigger) {
+    if (trigger) {
+      Tab.getOrCreateInstance(trigger).show();
+    }
+  }
+
+  updateHash(target) {
+    if (target && history.replaceState) {
+      history.replaceState(history.state, "", target);
+    } else if (target) {
+      location.hash = target;
+    }
   }
 }
-
-function hashChange(e) {
-  var oldUrlHash = new URL(e.oldURL).hash;
-  var newUrlHash = new URL(e.newURL).hash;
-  if(oldUrlHash == "" && newUrlHash == "") { return; }
-  if(newUrlHash != "") {
-    if(newUrlHash.includes("equipment")) {
-      var mainTab = document.querySelector("a[data-bs-target='#equipment']");
-      Tab.getInstance(mainTab).show();
-    }
-    else if(newUrlHash.includes("gate")) {
-      var mainTab = document.querySelector("a[data-bs-target='#enlightenment']");
-      Tab.getInstance(mainTab).show();
-    }
-    else if(newUrlHash.startsWith("#j")) {
-      var mainTab = document.querySelector("a[data-bs-target='#jobs']");
-      Tab.getInstance(mainTab).show();
-    }
-    var currentTab = document.querySelector("a[data-bs-target='" + newUrlHash + "']");
-    Tab.getInstance(currentTab).show();
-  }
-  else {
-    var mainTab = document.querySelector("a[data-bs-target='#stats']");
-    Tab.getInstance(mainTab).show();
-  }
-};

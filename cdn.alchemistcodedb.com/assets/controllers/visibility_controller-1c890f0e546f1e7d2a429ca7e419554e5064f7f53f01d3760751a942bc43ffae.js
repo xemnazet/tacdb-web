@@ -8,11 +8,12 @@ export default class extends Controller {
     this.hideableTargets.forEach((el) => {
       el.hidden = !el.hidden;
     });
-    if(e.target.innerHTML == "[+]") {
-      e.target.innerHTML = "[-]";
+    const trigger = e.currentTarget;
+    if(trigger.textContent.trim() == "[+]") {
+      trigger.textContent = "[-]";
     }
     else {
-      e.target.innerHTML = "[+]"
+      trigger.textContent = "[+]"
     }
   }
 
@@ -21,21 +22,26 @@ export default class extends Controller {
     this.hideableTargets.forEach((el) => {
       el.hidden = !el.hidden;
     });
-    if(e.target.innerHTML == "Show More") {
-      e.target.innerHTML = "Show Less";
+    const trigger = e.currentTarget;
+    if(trigger.textContent.trim() == "Show More") {
+      trigger.textContent = "Show Less";
     }
     else {
-      e.target.innerHTML = "Show More";
+      trigger.textContent = "Show More";
     }
   }
 
   toggleText(e) {
-    var collapseText = e.target.getAttribute("data-text");
-    if(e.target.innerHTML.startsWith("Show")) {
-      e.target.innerHTML = "Hide " + collapseText;
+    const trigger = e.currentTarget;
+    const collapseText = trigger.getAttribute("data-text");
+    if(!collapseText) {
+      return;
+    }
+    if(trigger.textContent.trim().startsWith("Show")) {
+      trigger.textContent = "Hide " + collapseText;
     }
     else {
-      e.target.innerHTML = "Show " + collapseText;
+      trigger.textContent = "Show " + collapseText;
     }
   }
 
@@ -49,21 +55,25 @@ export default class extends Controller {
         });
       }
     });
-    var triggerTab = document.getElementById("it" + e.target.getAttribute("data-insp-skill"));
-    var skillTab = document.getElementById("is" + e.target.getAttribute("data-insp-skill"));
+    const skillId = e.currentTarget.getAttribute("data-insp-skill");
+    const triggerTab = document.getElementById("it" + skillId);
+    const skillTab = document.getElementById("is" + skillId);
+    if(!triggerTab || !skillTab) {
+      return;
+    }
     if(!triggerTab.classList.contains("active")) {
       const triggerTabList = document.querySelectorAll("#triggerTabsContent .tab-pane");
       triggerTabList.forEach(triggerEl => {
         triggerEl.classList.remove("show", "active");
-        triggerTab.classList.add("show", "active");
       });
+      triggerTab.classList.add("show", "active");
     }
     if(!skillTab.classList.contains("active")) {
       const skillTabList = document.querySelectorAll("#inspTabsContent .tab-pane");
       skillTabList.forEach(skillEl => {
         skillEl.classList.remove("show", "active");
-        skillTab.classList.add("show", "active");
       });
+      skillTab.classList.add("show", "active");
     }
   }
 };

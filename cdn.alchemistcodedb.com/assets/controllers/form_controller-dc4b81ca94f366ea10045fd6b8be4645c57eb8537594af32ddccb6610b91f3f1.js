@@ -8,7 +8,7 @@ export default class extends Controller {
     clearTimeout(this.timeout);
     this.timeout = setTimeout(() => {
       this.disabled();
-      this.formTarget.requestSubmit();
+      this.formTarget?.requestSubmit();
     }, 250);
   }
 
@@ -38,17 +38,13 @@ export default class extends Controller {
   }
 
   resetScroll() {
-    var listing = document.getElementById("index_listing");
-    listing.scrollIntoView();
+    document.getElementById("index_listing")?.scrollIntoView();
   }
 
   hideModal(modalEl) {
-    Modal.getInstance(modalEl).hide();
-    modalEl.removeAttribute("aria-modal");
-    modalEl.setAttribute("aria-hidden", true);
-    modalEl.style = "display: none";
-    document.querySelector(".modal-backdrop").remove();
-    document.body.classList.remove("modal-open");
-    document.body.style = "";
+    if (!modalEl) {
+      return;
+    }
+    Modal.getOrCreateInstance(modalEl).hide();
   }
 };

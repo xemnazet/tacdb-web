@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import shutil
@@ -28,6 +29,10 @@ URL_ATTRIBUTE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 BODY_END = re.compile(r"</body\s*>", re.IGNORECASE)
+IMPORT_MAP = re.compile(
+    r'(<script\b(?=[^>]*\btype=["\']importmap["\'])[^>]*>)(.*?)(</script\s*>)',
+    re.IGNORECASE | re.DOTALL,
+)
 IGNORED_COPY_DIRECTORIES = shutil.ignore_patterns("__pycache__", "*.pyc")
 
 
@@ -95,33 +100,65 @@ def rebase_site_references(source_page, output_page, output_root):
     with output_page.open(encoding="utf-8", errors="replace", newline="") as page_file:
         source = page_file.read()
 
-    def rebase(match):
-        value = match.group(2)
+    def local_mirror_url(value):
         parsed = urlsplit(value)
-        if parsed.scheme or parsed.netloc or not parsed.path.startswith("../"):
-            return match.group(0)
+        if parsed.scheme and parsed.netloc:
+            mirror_root = output_root / parsed.netloc
+            mirror_target = (mirror_root / unquote(parsed.path.lstrip("/"))).resolve()
+            try:
+                mirror_target.relative_to(mirror_root.resolve())
+            except ValueError:
+                return value
+            if not mirror_target.exists():
+                return value
+            relative_url = Path(os.path.relpath(mirror_target, output_page.parent)).as_posix()
+            if not relative_url.startswith("."):
+                relative_url = "./" + relative_url
+            return urlunsplit(("", "", quote(relative_url, safe="/.-_~"), parsed.query, parsed.fragment))
 
+        if parsed.scheme or parsed.netloc or not parsed.path.startswith("../"):
+            return value
         source_target = (source_page.parent / unquote(parsed.path)).resolve()
         try:
             relative_target = source_target.relative_to(ROOT.resolve())
         except ValueError:
-            return match.group(0)
+            return value
 
         if SITE_ROOT.resolve() in source_target.parents:
             if SITE_ROOT.name not in Path(unquote(parsed.path)).parts:
-                return match.group(0)
+                return value
             relative_target = source_target.relative_to(SITE_ROOT.resolve())
 
         output_target = output_root / relative_target
         if not output_target.exists():
-            return match.group(0)
+            return value
 
         relative_url = Path(os.path.relpath(output_target, output_page.parent)).as_posix()
-        encoded_path = quote(relative_url, safe="/.-_~")
-        rebased_url = urlunsplit(("", "", encoded_path, parsed.query, parsed.fragment))
+        if not relative_url.startswith("."):
+            relative_url = "./" + relative_url
+        return urlunsplit(("", "", quote(relative_url, safe="/.-_~"), parsed.query, parsed.fragment))
+
+    def rebase(match):
+        value = match.group(2)
+        rebased_url = local_mirror_url(value)
+        if rebased_url == value:
+            return match.group(0)
         return match.group(0).replace(value, rebased_url, 1)
 
     updated = URL_ATTRIBUTE.sub(rebase, source)
+    def rewrite_import_map(match):
+        try:
+            import_map = json.loads(match.group(2))
+        except json.JSONDecodeError as error:
+            raise ValueError(f"Invalid import map in {source_page}: {error}") from error
+
+        imports = import_map.get("imports", {})
+        for specifier, address in imports.items():
+            if isinstance(address, str):
+                imports[specifier] = local_mirror_url(address)
+        return match.group(1) + json.dumps(import_map, separators=(",", ":")) + match.group(3)
+
+    updated = IMPORT_MAP.sub(rewrite_import_map, updated)
     if updated != source:
         with output_page.open("w", encoding="utf-8", newline="") as page_file:
             page_file.write(updated)

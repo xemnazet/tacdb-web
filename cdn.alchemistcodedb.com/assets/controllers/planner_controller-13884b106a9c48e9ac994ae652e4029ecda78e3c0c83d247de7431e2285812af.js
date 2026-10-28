@@ -18,6 +18,29 @@ var addJMTK, addENTK, addMATK, addSkillsTK, addGearTK, addGATK, addCardTK, addCa
 var addJMTK2, addENTK2, addMATK2, addSkillsTK2, addGearTK2, addGATK2, addCardTK2, addCardGSTK2, addCATK2, addTETK2, addBondTK2, addEXPTK2, addCrystalTK2;
 var siteURL = [window.location.protocol, "//", window.location.host].join("");
 
+function requestPlannerData(path, query) {
+  return get(path, { responseKind: "json", query }).then((response) => {
+    if (!response.ok) {
+      throw new Error(`${path} returned HTTP ${response.status}`);
+    }
+    return response.json;
+  });
+}
+
+function showPlannerError(error) {
+  console.error("Unit Planner data request failed", error);
+  const planner = document.getElementById("unitPlanner");
+  if (!planner || document.getElementById("plannerDataError")) {
+    return;
+  }
+  const message = document.createElement("div");
+  message.id = "plannerDataError";
+  message.className = "alert alert-danger";
+  message.setAttribute("role", "alert");
+  message.textContent = `The Unit Planner could not load its data from this site's API. Static GitHub Pages hosting does not provide these API endpoints. (${error.message})`;
+  planner.prepend(message);
+}
+
 export default class extends Controller {
   connect() {
     locale = document.body.getAttribute("data-locale");
@@ -83,63 +106,24 @@ export default class extends Controller {
       if(clientVersion != version) {
         document.getElementById("loading").classList.remove("d-none");
         document.getElementById("unitsSelect").disabled = true;
-        localStorage.setItem("db-version-" + locale, version);
-        return new Promise(function (resolve, reject) {
-          const request = get("/get-gears", { responseKind: "json", query: { locale: locale } });
-          request.then((response) => {
-            if(response.ok) {
-              resolve(response.json);
-            }
-          });
-        }).then(function (data) {
-          return db.Gear.bulkPut(data);
-        }).then(function () {
-          return new Promise(function (resolve, reject) {
-            const request = get("/get-cards", { responseKind: "json", query: { locale: locale } });
-            request.then((response) => {
-              if(response.ok) {
-                resolve(response.json);
-              }
-            })
-          }).then(function (data) {
-            return db.Card.bulkPut(data);
-          })
-        }).then(function () {
-          return new Promise(function (resolve, reject) {
-            const request = get("/get-runes", { responseKind: "json", query: { locale: locale } });
-            request.then((response) => {
-              if(response.ok) {
-                resolve(response.json);
-              }
-            })
-          }).then(function (data) {
-            return db.Rune.bulkPut(data);
-          })
-        }).then(function () {
-          return new Promise(function (resolve, reject) {
-            const request = get("/get-expeditions", { responseKind: "json", query: { locale: locale } });
-            request.then((response) => {
-              if(response.ok) {
-                resolve(response.json);
-              }
-            })
-          }).then(function (data) {
-            return db.Expedition.bulkPut(data);
-          })
-        }).then(function () {
-          return new Promise(function (resolve, reject) {
-            const request = get("/get-crystals", { responseKind: "json", query: { locale: locale } });
-            request.then((response) => {
-              if(response.ok) {
-                resolve(response.json);
-              }
-            })
-          }).then(function (data) {
-            return db.Crystal.bulkPut(data);
-          })
-        }).then(function () {
+        return requestPlannerData("/get-gears", { locale }).then((data) => db.Gear.bulkPut(data))
+        .then(() => requestPlannerData("/get-cards", { locale }))
+        .then((data) => db.Card.bulkPut(data))
+        .then(() => requestPlannerData("/get-runes", { locale }))
+        .then((data) => db.Rune.bulkPut(data))
+        .then(() => requestPlannerData("/get-expeditions", { locale }))
+        .then((data) => db.Expedition.bulkPut(data))
+        .then(() => requestPlannerData("/get-crystals", { locale }))
+        .then((data) => db.Crystal.bulkPut(data))
+        .then(function () {
           document.getElementById("loading").classList.add("d-none");
           document.getElementById("unitsSelect").disabled = false;
+          localStorage.setItem("db-version-" + locale, version);
+        })
+        .catch((error) => {
+          document.getElementById("loading").classList.add("d-none");
+          document.getElementById("unitsSelect").disabled = true;
+          showPlannerError(error);
         });
       }
     });
@@ -151,18 +135,14 @@ export default class extends Controller {
     var unitSlug = document.getElementById("unitsSelect").value;
     if(unitSlug) {
       document.getElementById("loading").classList.remove("d-none");
-      return new Promise(function (resolve, reject) {
-        const request = get("/get-unit", { responseKind: "json", query: { slug: unitSlug, locale: locale } });
-        request.then((response) => {
-          if(response.ok) {
-            resolve(response.json);
-            document.getElementById("loading").classList.add("d-none");
-          }
-        });
-      }).then(function (data) {
+      return requestPlannerData("/get-unit", { slug: unitSlug, locale }).then(function (data) {
+        document.getElementById("loading").classList.add("d-none");
         unitData = data;
         resetUnit();
         buildUnit();
+      }).catch((error) => {
+        document.getElementById("loading").classList.add("d-none");
+        showPlannerError(error);
       });
     }
     else {
@@ -6200,7 +6180,7 @@ function setGearList() {
         activeSlot.setAttribute("data-type-id", this.getAttribute("data-type-id"));
         activeSlot.setAttribute("data-min-id", this.getAttribute("data-min-id"));
         activeSlot.setAttribute("data-rank-id", 5);
-        var myModal = Modal.getInstance(document.getElementById("gearModal"));
+        var myModal = Modal.getOrCreateInstance(document.getElementById("gearModal"));
         myModal.hide();
         updateUnit(3);
       });
@@ -6315,7 +6295,7 @@ function setCardList() {
     cardEl.addEventListener("click", function(e) {
       activeSlot.setAttribute("data-card-id", this.getAttribute("data-card-id"));
       activeSlot.setAttribute("data-limit-break", this.getAttribute("data-limit-break"));
-      var myModal = Modal.getInstance(document.getElementById("cardModal"));
+      var myModal = Modal.getOrCreateInstance(document.getElementById("cardModal"));
       myModal.hide();
       updateUnit(5);
     });
@@ -6642,7 +6622,7 @@ function setRuneList() {
       activeSlot.setAttribute("data-rune-id", this.getAttribute("data-rune-id"));
       activeSlot.setAttribute("data-set", this.getAttribute("data-set"));
       activeSlot.setAttribute("data-enhancement", this.getAttribute("data-enhancement"));
-      var myModal = Modal.getInstance(document.getElementById("runeModal"));
+      var myModal = Modal.getOrCreateInstance(document.getElementById("runeModal"));
       myModal.hide();
       setRuneStats(this);
       myModal = Modal.getOrCreateInstance(document.getElementById("runeStatsModal"));
@@ -6985,7 +6965,7 @@ function setCrystalList() {
     crystalEl.addEventListener("click", function(e) {
       activeSlot.setAttribute("data-crystal-id", this.getAttribute("data-crystal-id"));
       activeSlot.setAttribute("data-rank-id", this.getAttribute("data-rank-id"));
-      var myModal = Modal.getInstance(document.getElementById("crystalModal"));
+      var myModal = Modal.getOrCreateInstance(document.getElementById("crystalModal"));
       myModal.hide();
       updateUnit(16);
     });
@@ -7377,17 +7357,13 @@ function parseShareLink() {
   }
 
   document.getElementById("loading").classList.remove("d-none");
-  return new Promise(function (resolve, reject) {
-    const request = get("/get-unit", { responseKind: "json", query: { slug: unitSelect.value, locale: locale } });
-    request.then((response) => {
-      if(response.ok) {
-        resolve(response.json);
-        document.getElementById("loading").classList.add("d-none");
-      }
-    });
-  }).then(function (data) {
+  return requestPlannerData("/get-unit", { slug: unitSelect.value, locale }).then(function (data) {
+    document.getElementById("loading").classList.add("d-none");
     unitData = data;
     buildUnit();
+  }).catch((error) => {
+    document.getElementById("loading").classList.add("d-none");
+    showPlannerError(error);
   });
 }
 
